@@ -307,13 +307,12 @@
                 // Initialize BasemapGallery without custom basemaps
                 const basemapGallery = new BasemapGallery({
                     view: view,
-                    source: [
-                        Basemap.fromId('topo-vector'),
-                        Basemap.fromId('streets-vector'),
-                        Basemap.fromId('satellite'),
-                        Basemap.fromId('hybrid'),
-                        Basemap.fromId('terrain')
-                    ]
+                    source: {
+                        portal: {
+                            url: "https://www.arcgis.com",
+                            useVectorBasemaps: true // Load vector basemaps
+                        }
+                    }
                 });
 
                 // Add BasemapGallery to the top-right corner
