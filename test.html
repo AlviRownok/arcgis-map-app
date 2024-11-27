@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive ArcGIS Map with User Information and CSV Export</title>
+    
+    <!-- ArcGIS CSS -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
+    
+    <!-- AWS SDK for JavaScript -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1367.0.min.js"></script>
+    
+    <!-- PapaParse for CSV Parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    
+    <!-- ArcGIS JavaScript API -->
+    <script src="https://js.arcgis.com/4.30/"></script>
+    
+    <style>
+        /* Reset default margins and paddings */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Style the map container */
+        #viewDiv {
+            height: 90vh; /* 90% of the viewport height */
+            width: 100%;
+            margin: 20px auto;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+        }
+
+        /* Style the header */
+        h1 {
+            text-align: center;
+            margin: 20px 0;
+            font-family: Arial, sans-serif;
+            color: #333;
+        }
+
+        /* Style the controls container */
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.3);
+            max-width: 300px;
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        /* Style form labels and inputs */
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-family: Arial, sans-serif;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* Style buttons */
+        .control-button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            text-align: center;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+
+        .control-button:hover {
+            background-color: #45a049;
+        }
+
+        /* Developer Section Styles */
+        #developerSection {
+            display: none; /* Hidden by default */
+            margin-top: 15px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+
+        /* Style the developer password input */
+        #devPasswordInput {
+            width: 100%;
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        /* Style the Reset button */
+        #resetBtn {
+            background-color: #f44336; /* Red */
+        }
+
+        #resetBtn:hover {
+            background-color: #da190b;
+        }
+
+        /* Style the Remove Entry button */
+        .remove-entry-btn {
+            background-color: #ff9800; /* Orange */
+        }
+
+        .remove-entry-btn:hover {
+            background-color: #e68900;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            #controls {
+                left: 10px;
+                top: 10px;
+                max-width: 90%;
+            }
+
+            .control-button {
+                font-size: 12px;
+                padding: 8px;
+            }
+
+            #viewDiv {
+                height: 80vh;
+            }
+        }
+
+        /* Style for the "Show Developer Section" button */
+        #showDevSectionBtn {
+            background-color: #008CBA; /* Blue */
+        }
+
+        #showDevSectionBtn:hover {
+            background-color: #005f6a;
+        }
+
+        /* Style the user list in Developer Section */
+        #userList {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        .user-item span {
+            flex-grow: 1;
+        }
+    </style>
+</head>
+<body>
+    <h1>Interactive ArcGIS Map with User Information and CSV Export</h1>
+    <div id="viewDiv"></div>
+    
+    <div id="controls">
+        <!-- User Information Form -->
+        <div id="userForm">
+            <div class="form-group">
+                <label for="nome">Nome:</label>
+                <input type="text" id="nome" placeholder="Inserisci il tuo nome">
+            </div>
+            <div class="form-group">
+                <label for="cognome">Cognome:</label>
+                <input type="text" id="cognome" placeholder="Inserisci il tuo cognome">
+            </div>
+            <div class="form-group">
+                <label for="azienda">Nome dell'azienda di produzione:</label>
+                <input type="text" id="azienda" placeholder="Inserisci il nome dell'azienda">
+            </div>
+            <button id="okBtn" class="control-button">OK</button>
+        </div>
+
+        <!-- Action Buttons -->
+        <button id="saveBtn" class="control-button" disabled>Save</button>
+        <button id="downloadBtn" class="control-button" disabled>Download CSV</button>
+        <button id="doneBtn" class="control-button" disabled>Done</button>
+
+        <!-- Developer Section Toggle Button -->
+        <button id="showDevSectionBtn" class="control-button">Developer Login</button>
+
+        <!-- Developer Section -->
+        <div id="developerSection">
+            <div class="form-group">
+                <label for="devPassword">Enter Developer Password:</label>
+                <input type="password" id="devPasswordInput" placeholder="Password">
+            </div>
+            <button id="resetBtn" class="control-button">Reset All Data</button>
+
+            <!-- User List for Removing Entries -->
+            <div id="userListContainer" style="display: none;">
+                <h3>Remove User Entries</h3>
+                <div id="userList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Add global error handler for unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+        });
+
+        // AWS S3 Configuration using Cognito Identity Pool
+        AWS.config.update({
+            region: 'eu-north-1' // Replace with your AWS region if different
+        });
+
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            IdentityPoolId: 'eu-north-1:9785be83-df45-40ce-8ecb-b05bf8990d69' // Your Cognito Identity Pool ID
+        });
+
+        const S3_BUCKET = 'arcgisapp'; // Your S3 bucket name
+        const S3_KEY = 'map_features.csv'; // Path to your CSV file
+
+        // Developer Password (Should be stored securely)
+        const DEV_PASSWORD = 'Spici2023!!'; // Replace with your secure developer password
+
+        // Check if ArcGIS API loaded successfully
+        if (typeof require === 'undefined') {
+            alert("Errore nel caricamento dell'API di ArcGIS. Verifica la tua connessione internet o riprova più tardi.");
+        } else {
+            require([
+                "esri/Map",
+                "esri/views/MapView",
+                "esri/widgets/BasemapGallery",
+                "esri/widgets/Sketch",
+                "esri/layers/GraphicsLayer",
+                "esri/layers/TileLayer",
+                "esri/Basemap",
+                "esri/Graphic",
+                "esri/symbols/SimpleMarkerSymbol",
+                "esri/symbols/SimpleFillSymbol",
+                "esri/geometry/support/webMercatorUtils",
+                "esri/geometry/geometryEngine"
+            ], function(
+                Map,
+                MapView,
+                BasemapGallery,
+                Sketch,
+                GraphicsLayer,
+                TileLayer,
+                Basemap,
+                Graphic,
+                SimpleMarkerSymbol,
+                SimpleFillSymbol,
+                webMercatorUtils,
+                geometryEngine
+            ) {
+
+                // Initialize the Map
+                const map = new Map({
+                    basemap: "topo-vector" // Initial basemap
+                });
+
+                // Initialize the MapView
+                const view = new MapView({
+                    container: "viewDiv",
+                    map: map,
+                    center: [14.2681, 40.8518], // Napoli, Italy
+                    zoom: 12
+                });
+
+                // Add the TileLayer as an operational layer over the basemap
+                const tileLayer = new TileLayer({
+                    url: 'https://services7.arcgis.com/55ttfTUNbwWurzZp/arcgis/rest/services/Napoli_Nov_2d_usodelsuolo/MapServer'
+                });
+                map.add(tileLayer);
+
+                // Initialize BasemapGallery without custom basemaps
+                const basemapGallery = new BasemapGallery({
+                    view: view,
+                    source: [
+                        Basemap.fromId('topo-vector'),
+                        Basemap.fromId('streets-vector'),
+                        Basemap.fromId('satellite'),
+                        Basemap.fromId('hybrid'),
+                        Basemap.fromId('terrain')
+                    ]
+                });
+
+                // Add BasemapGallery to the top-right corner
+                view.ui.add(basemapGallery, "top-right");
+
+                // Initialize GraphicsLayer for user-drawn polygons
+                const graphicsLayer = new GraphicsLayer();
+                map.add(graphicsLayer);
+
+                // Initialize Sketch Widget
+                const sketch = new Sketch({
+                    layer: graphicsLayer,
+                    view: view,
+                    creationMode: "single", // Only one polygon at a time
+                    visibleElements: {
+                        selectionTools: {
+                            "rectangle": false,
+                            "circle": false
+                        },
+                        settingsMenu: false
+                    },
+                    availableCreateTools: ["polygon"]
+                });
+                view.ui.add(sketch, "top-right");
+
+                // Symbol Definitions
+                const markerSymbol = new SimpleMarkerSymbol({
+                    color: [226, 119, 40], // Orange
+                    outline: {
+                        color: [255, 255, 255],
+                        width: 2
+                    }
+                });
+
+                const fillSymbol = new SimpleFillSymbol({
+                    color: [227, 139, 79, 0.5], // Semi-transparent Orange
+                    outline: {
+                        color: [255, 255, 255],
+                        width: 1
+                    }
+                });
+
+                // Data Structures
+                let users = []; // Array to hold user information and their polygons
+                let currentUser = null; // Object to hold the current user info
+
+                // Helper Function to Generate Random Color
+                function getRandomColor() {
+                    const letters = '0123456789ABCDEF';
+                    let color = '#';
+                    for (let i = 0; i < 6; i++) {
+                        color += letters[Math.floor(Math.random() * 16)];
+                    }
+                    return color;
+                }
+
+                // DOM Elements
+                const okBtn = document.getElementById("okBtn");
+                const saveBtn = document.getElementById("saveBtn");
+                const downloadBtn = document.getElementById("downloadBtn");
+                const doneBtn = document.getElementById("doneBtn");
+                const showDevSectionBtn = document.getElementById("showDevSectionBtn");
+                const developerSection = document.getElementById("developerSection");
+                const devPasswordInput = document.getElementById("devPasswordInput");
+                const resetBtn = document.getElementById("resetBtn");
+                const userListContainer = document.getElementById("userListContainer");
+                const userList = document.getElementById("userList");
+
+                // Function to Load CSV from S3
+                function loadCSVFromS3() {
+                    const s3 = new AWS.S3();
+                    const params = {
+                        Bucket: S3_BUCKET,
+                        Key: S3_KEY
+                    };
+                    
+                    s3.getObject(params).promise()
+                        .then(data => {
+                            const csvData = data.Body.toString('utf-8');
+                            const parsed = Papa.parse(csvData, {
+                                header: true,
+                                skipEmptyLines: true,
+                                dynamicTyping: false,
+                                quoteChar: '"',
+                                escapeChar: '"',
+                            });
+                        
+                            if (parsed.errors.length) {
+                                // Handle parsing errors
+                                console.error("Error parsing CSV:", parsed.errors);
+                                alert("Errore nel parsing del CSV.");
+                                return;
+                            }
+                        
+                            const rows = parsed.data;
+
+                            if (!rows || rows.length === 0) {
+                                console.log("No data found in CSV.");
+                                return;
+                            }
+                        
+                            // Group rows by user (Nome, Cognome, Azienda, Color)
+                            const userMap = {};
+                        
+                            rows.forEach(row => {
+                                if (!row.Nome || !row.Cognome || !row.Azienda || !row.Color || !row.Geometry) {
+                                    // Skip incomplete entries
+                                    return;
+                                }
+
+                                const key = `${row.Nome}|${row.Cognome}|${row.Azienda}|${row.Color}`;
+                                if (!userMap[key]) {
+                                    userMap[key] = {
+                                        id: Date.now() + Math.random(), // Unique identifier
+                                        nome: row.Nome,
+                                        cognome: row.Cognome,
+                                        azienda: row.Azienda,
+                                        color: row.Color,
+                                        polygons: [],
+                                        labels: []
+                                    };
+                                    users.push(userMap[key]);
+                                }
+                        
+                                // Reconstruct polygon from Geometry
+                                if (row.Geometry) {
+                                    try {
+                                        let geometryData = row.Geometry.trim();
+
+                                        // Remove outer quotes if present
+                                        if (geometryData.startsWith('"') && geometryData.endsWith('"')) {
+                                            geometryData = geometryData.substring(1, geometryData.length - 1);
+                                        }
+
+                                        // Replace any escaped double quotes
+                                        geometryData = geometryData.replace(/\\"/g, '"');
+
+                                        const geometryObj = JSON.parse(geometryData);
+
+                                        // Create polygon with spatial reference
+                                        const polygon = {
+                                            type: "polygon",
+                                            rings: geometryObj.rings,
+                                            spatialReference: geometryObj.spatialReference || { wkid: 102100 }
+                                        };
+
+                                        // Create graphic
+                                        const polygonGraphic = new Graphic({
+                                            geometry: polygon,
+                                            symbol: new SimpleFillSymbol({
+                                                color: hexToRgbA(userMap[key].color, 0.5),
+                                                outline: {
+                                                    color: [255, 255, 255],
+                                                    width: 1
+                                                }
+                                            }),
+                                            attributes: {
+                                                Type: row.Type || "",
+                                                Place: row.Place || "",
+                                                Geometry: row.Geometry || "",
+                                                Area: row.Area || "",
+                                                Nome: row.Nome,
+                                                Cognome: row.Cognome,
+                                                Azienda: row.Azienda
+                                            }
+                                        });
+                                
+                                        graphicsLayer.add(polygonGraphic);
+                                        userMap[key].polygons.push(polygonGraphic);
+                                
+                                        // Add label using extent.center
+                                        if (polygonGraphic.geometry.extent && polygonGraphic.geometry.extent.center) {
+                                            const labelGraphic = new Graphic({
+                                                geometry: polygonGraphic.geometry.extent.center,
+                                                symbol: {
+                                                    type: "text",
+                                                    color: userMap[key].color,
+                                                    haloColor: "white",
+                                                    haloSize: "1px",
+                                                    text: `${row.Nome} ${row.Cognome}\n${row.Azienda}`,
+                                                    font: {
+                                                        family: "Arial",
+                                                        size: 12,
+                                                        weight: "bold"
+                                                    },
+                                                    yoffset: -20
+                                                }
+                                            });
+                                    
+                                            graphicsLayer.add(labelGraphic);
+                                            userMap[key].labels.push(labelGraphic);
+                                        } else {
+                                            console.error("Extent center is not available for polygon:", polygon);
+                                        }
+                                    } catch (error) {
+                                        console.error("Error reconstructing polygon from geometry:", error);
+                                        console.error("Failed Geometry value:", row.Geometry);
+                                    }
+                                } else {
+                                    console.error("Geometry is undefined for row:", row);
+                                }
+                            });
+                        })
+                        .catch(err => {
+                            if (err.code === 'NoSuchKey') {
+                                console.log("CSV file does not exist in S3. Starting with empty data.");
+                                return;
+                            }
+                            console.error("Error fetching CSV from S3:", err);
+                            alert("Errore nel caricamento dei dati da S3.");
+                        });
+                }
+
+                // Function to Upload CSV to S3
+                function uploadCSVToS3() {
+                    const s3 = new AWS.S3();
+
+                    const csvData = [];
+
+                    users.forEach(user => {
+                        user.polygons.forEach(polygon => {
+                            const attributes = polygon.attributes;
+                            // Ensure attributes is defined
+                            if (!attributes) {
+                                console.error("Polygon attributes are undefined for polygon:", polygon);
+                                return; // Skip this polygon
+                            }
+
+                            // Serialize the geometry, including spatial reference
+                            const geometry = {
+                                rings: polygon.geometry.rings,
+                                spatialReference: polygon.geometry.spatialReference
+                            };
+
+                            const row = {
+                                Nome: attributes.Nome,
+                                Cognome: attributes.Cognome,
+                                Azienda: attributes.Azienda,
+                                Color: user.color,
+                                Type: attributes.Type || "",
+                                Place: attributes.Place || "",
+                                Geometry: JSON.stringify(geometry),
+                                Area: attributes.Area || ""
+                            };
+
+                            csvData.push(row);
+                        });
+                    });
+
+                    // Generate CSV content using PapaParse
+                    const csvContent = Papa.unparse(csvData);
+
+                    const params = {
+                        Bucket: S3_BUCKET,
+                        Key: S3_KEY,
+                        Body: csvContent,
+                        ContentType: "text/csv"
+                    };
+
+                    s3.putObject(params).promise()
+                        .then(data => {
+                            console.log("CSV uploaded successfully to S3.");
+                        })
+                        .catch(err => {
+                            console.error("Error uploading CSV to S3:", err);
+                            alert("Errore nell'upload dei dati su S3.");
+                        });
+                }
+
+                // Load CSV from S3 on Initialization
+                loadCSVFromS3();
+
+                // Event Listener for "OK" Button
+                okBtn.addEventListener("click", function() {
+                    const nome = document.getElementById("nome").value.trim();
+                    const cognome = document.getElementById("cognome").value.trim();
+                    const azienda = document.getElementById("azienda").value.trim();
+
+                    if (nome === "" || cognome === "" || azienda === "") {
+                        alert("Per favore, compila tutti i campi.");
+                        return;
+                    }
+
+                    // Assign a random color to the user
+                    const color = getRandomColor();
+
+                    // Create user object
+                    currentUser = {
+                        id: Date.now(), // Unique identifier
+                        nome: nome,
+                        cognome: cognome,
+                        azienda: azienda,
+                        color: color,
+                        polygons: [], // To store associated polygons
+                        labels: []    // To store associated labels
+                    };
+
+                    // Add user to the users array
+                    users.push(currentUser);
+
+                    // Update form state
+                    document.getElementById("userForm").style.display = "none";
+                    saveBtn.disabled = false;
+                    downloadBtn.disabled = false;
+                    doneBtn.disabled = false;
+
+                    alert("Dati utente salvati. Puoi ora disegnare il tuo poligono.");
+                });
+
+                // Event Listener for Polygon Creation
+                sketch.on("create", async function(event) {
+                    if (event.state === "complete") {
+                        const polygon = event.graphic.geometry;
+
+                        // Calculate area using geometryEngine
+                        let area;
+                        try {
+                            area = calculateGeodesicArea(polygon);
+                            console.log(`Polygon Area: ${area.toFixed(2)} sqm`);
+                        } catch (error) {
+                            console.error("Error calculating area:", error);
+                            alert("Si è verificato un errore nel calcolo dell'area.");
+                            return;
+                        }
+
+                        // Fetch places within polygon
+                        let places = [];
+                        try {
+                            places = await getPlacesWithinPolygon(polygon);
+                            console.log("Places within polygon:", places);
+                        } catch (error) {
+                            console.error("Error fetching places:", error);
+                            alert("Si è verificato un errore nel recupero dei dati.");
+                        }
+
+                        // Assign user color to polygon
+                        event.graphic.symbol = new SimpleFillSymbol({
+                            color: hexToRgbA(currentUser.color, 0.5), // Semi-transparent
+                            outline: {
+                                color: [255, 255, 255],
+                                width: 1
+                            }
+                        });
+
+                        // Ensure spatial reference is set
+                        if (!polygon.spatialReference) {
+                            polygon.spatialReference = view.spatialReference;
+                        }
+
+                        // Add attributes
+                        event.graphic.attributes = {
+                            Type: "Polygon",
+                            Place: places.length > 0 ? places.join(", ") : "None Found",
+                            Geometry: "", // Will be set in uploadCSVToS3()
+                            Area: `${area.toFixed(2)} sqm`,
+                            Nome: currentUser.nome,
+                            Cognome: currentUser.cognome,
+                            Azienda: currentUser.azienda
+                        };
+
+                        // Add label to display user info using extent.center
+                        if (polygon.extent && polygon.extent.center) {
+                            const labelGraphic = new Graphic({
+                                geometry: polygon.extent.center,
+                                symbol: {
+                                    type: "text",
+                                    color: currentUser.color,
+                                    haloColor: "white",
+                                    haloSize: "1px",
+                                    text: `${currentUser.nome} ${currentUser.cognome}\n${currentUser.azienda}`,
+                                    font: {
+                                        family: "Arial",
+                                        size: 12,
+                                        weight: "bold"
+                                    },
+                                    yoffset: -20
+                                }
+                            });
+
+                            graphicsLayer.add(labelGraphic);
+                            currentUser.labels.push(labelGraphic);
+                        } else {
+                            console.error("Extent center is not available for polygon:", polygon);
+                        }
+
+                        // Store the polygon in the user's polygons array
+                        currentUser.polygons.push(event.graphic);
+
+                        // Upload updated CSV to S3
+                        uploadCSVToS3();
+                    }
+                });
+
+                // Event Listener for "Save" Button
+                saveBtn.addEventListener("click", function() {
+                    alert("Tutti i poligoni sono stati salvati.");
+                });
+
+                // Event Listener for "Download CSV" Button
+                downloadBtn.addEventListener("click", function() {
+                    const csvData = [];
+
+                    users.forEach(user => {
+                        user.polygons.forEach(polygon => {
+                            const attributes = polygon.attributes;
+                            // Ensure attributes is defined
+                            if (!attributes) {
+                                console.error("Polygon attributes are undefined for polygon:", polygon);
+                                return; // Skip this polygon
+                            }
+
+                            // Serialize the geometry, including spatial reference
+                            const geometry = {
+                                rings: polygon.geometry.rings,
+                                spatialReference: polygon.geometry.spatialReference
+                            };
+
+                            const row = {
+                                Nome: attributes.Nome,
+                                Cognome: attributes.Cognome,
+                                Azienda: attributes.Azienda,
+                                Color: user.color,
+                                Type: attributes.Type || "",
+                                Place: attributes.Place || "",
+                                Geometry: JSON.stringify(geometry),
+                                Area: attributes.Area || ""
+                            };
+
+                            csvData.push(row);
+                        });
+                    });
+
+                    // Generate CSV content using PapaParse
+                    const csvContent = Papa.unparse(csvData);
+
+                    // Create a Blob from the CSV string
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "map_features.csv");
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                });
+
+                // Event Listener for "Done" Button
+                doneBtn.addEventListener("click", function() {
+                    // Reset the form for the next user
+                    currentUser = null;
+                    document.getElementById("nome").value = "";
+                    document.getElementById("cognome").value = "";
+                    document.getElementById("azienda").value = "";
+                    document.getElementById("userForm").style.display = "block";
+                    saveBtn.disabled = true;
+                    downloadBtn.disabled = true;
+                    doneBtn.disabled = true;
+                });
+
+                // Event Listener for "Show Developer Section" Button
+                showDevSectionBtn.addEventListener("click", function() {
+                    developerSection.style.display = "block";
+                    showDevSectionBtn.style.display = "none";
+                });
+
+                // Event Listener for "Reset" Button in Developer Section
+                resetBtn.addEventListener("click", function() {
+                    const enteredPassword = devPasswordInput.value;
+                    
+                    if (enteredPassword !== DEV_PASSWORD) {
+                        alert("Password errata. Accesso negato.");
+                        return;
+                    }
+
+                    // Populate user list
+                    populateUserList();
+                    userListContainer.style.display = "block";
+                });
+
+                // Event Listener for Developer Password Input (Enter Key)
+                devPasswordInput.addEventListener("keypress", function(event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        resetBtn.click();
+                    }
+                });
+
+                // Function to Populate User List in Developer Section
+                function populateUserList() {
+                    userList.innerHTML = "";
+                    if (users.length === 0) {
+                        userList.innerHTML = "<p>Nessun utente da rimuovere.</p>";
+                        return;
+                    }
+
+                    users.forEach(user => {
+                        const userItem = document.createElement("div");
+                        userItem.classList.add("user-item");
+
+                        const userInfo = document.createElement("span");
+                        userInfo.textContent = `${user.nome} ${user.cognome} (${user.azienda})`;
+
+                        const removeBtn = document.createElement("button");
+                        removeBtn.textContent = "Rimuovi";
+                        removeBtn.classList.add("control-button", "remove-entry-btn");
+                        removeBtn.addEventListener("click", function() {
+                            removeUser(user.id);
+                        });
+
+                        userItem.appendChild(userInfo);
+                        userItem.appendChild(removeBtn);
+                        userList.appendChild(userItem);
+                    });
+                }
+
+                // Function to Remove a User by ID
+                function removeUser(userId) {
+                    // Find the user index
+                    const userIndex = users.findIndex(user => user.id === userId);
+                    if (userIndex === -1) {
+                        alert("Utente non trovato.");
+                        return;
+                    }
+
+                    // Remove user's polygons from GraphicsLayer
+                    users[userIndex].polygons.forEach(polygon => {
+                        graphicsLayer.remove(polygon);
+                    });
+
+                    // Remove user's labels from GraphicsLayer
+                    users[userIndex].labels.forEach(label => {
+                        graphicsLayer.remove(label);
+                    });
+
+                    // Remove user from users array
+                    users.splice(userIndex, 1);
+
+                    // Update user list
+                    populateUserList();
+
+                    // Upload updated CSV to S3
+                    uploadCSVToS3();
+
+                    alert("Utente rimosso con successo.");
+                }
+
+                // Helper Function to Calculate Geodesic Area using geometryEngine
+                function calculateGeodesicArea(polygon) {
+                    if (!geometryEngine) {
+                        throw new Error("geometryEngine is not available.");
+                    }
+                    const area = geometryEngine.geodesicArea(polygon, "square-meters");
+                    return area;
+                }
+
+                // Helper Function to Convert Polygon to Overpass 'poly' Format
+                function convertPolygonToOverpassPoly(polygon) {
+                    // Convert from Web Mercator to WGS84
+                    const wgs84Polygon = webMercatorUtils.webMercatorToGeographic(polygon);
+                    const rings = wgs84Polygon.rings;
+
+                    // Overpass 'poly' expects "lat lon" pairs
+                    const coordinates = rings[0].map(coord => `${coord[1]} ${coord[0]}`).join(' ');
+
+                    console.log("Overpass poly string:", coordinates); // Debugging
+
+                    return coordinates;
+                }
+
+                // Helper Function to Fetch Places Using Overpass API
+                async function getPlacesWithinPolygon(polygon) {
+                    const overpassUrl = "https://overpass-api.de/api/interpreter";
+
+                    const poly = convertPolygonToOverpassPoly(polygon);
+
+                    const query = `
+                        [out:json][timeout:25];
+                        (
+                          node["name"](poly:"${poly}");
+                          way["name"](poly:"${poly}");
+                        );
+                        out center;
+                    `;
+
+                    console.log("Overpass QL Query:", query); // Debugging
+
+                    try {
+                        const response = await fetch(overpassUrl, {
+                            method: "POST",
+                            body: query,
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded"
+                            }
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Overpass API request failed with status ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        console.log("Overpass API Response:", data); // Debugging
+
+                        // Extract place names
+                        const places = data.elements
+                            .map(element => element.tags && element.tags.name)
+                            .filter(name => name); // Remove undefined names
+
+                        // Remove duplicates
+                        const uniquePlaces = [...new Set(places)];
+
+                        return uniquePlaces;
+                    } catch (error) {
+                        console.error("Error fetching data from Overpass API:", error);
+                        alert("Si è verificato un errore durante il recupero dei dati. Riprova.");
+                        return [];
+                    }
+                }
+
+                // Helper Function to Convert HEX to RGBA
+                function hexToRgbA(hex, alpha){
+                    let c;
+                    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                        c= hex.substring(1).split('');
+                        if(c.length=== 3){
+                            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+                        }
+                        c= '0x' + c.join('');
+                        return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
+                    }
+                    throw new Error('Bad Hex');
+                }
+
+            }); // End of require function
+        } // End of else block
+
+    })(); // End of IIFE
+    </script>
+</body>
+</html>
