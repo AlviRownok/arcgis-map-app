@@ -870,6 +870,20 @@
                     return area;
                 }
 
+                // Helper Function to Convert HEX to RGBA
+                function hexToRgbA(hex, alpha){
+                    let c;
+                    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                        c= hex.substring(1).split('');
+                        if(c.length=== 3){
+                            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+                        }
+                        c= '0x' + c.join('');
+                        return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
+                    }
+                    throw new Error('Bad Hex');
+                }
+
                 // Helper Function to Convert Polygon to Overpass 'poly' Format
                 function convertPolygonToOverpassPoly(polygon) {
                     // Convert from Web Mercator to WGS84
@@ -932,20 +946,6 @@
                         alert("Si è verificato un errore durante il recupero dei dati. Riprova.");
                         return [];
                     }
-                }
-
-                // Helper Function to Convert HEX to RGBA
-                function hexToRgbA(hex, alpha){
-                    let c;
-                    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
-                        c= hex.substring(1).split('');
-                        if(c.length=== 3){
-                            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
-                        }
-                        c= '0x' + c.join('');
-                        return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
-                    }
-                    throw new Error('Bad Hex');
                 }
 
             }); // End of require function
