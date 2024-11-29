@@ -37,9 +37,7 @@ This project is an interactive web application that allows users to draw polygon
 
 ## Demo
 
-[Live Demo](https://alvirownok.github.io/your-repo-name/)
-
-*Note: Replace the above URL with the actual link to your live application on GitHub Pages.*
+[Live Demo](https://alvirownok.github.io/arcgis-map-app/)
 
 ## Prerequisites
 
@@ -61,7 +59,7 @@ Follow these steps to host your application on GitHub Pages:
    - If you haven't already, clone this repository to your local machine:
 
      ```bash
-     git clone https://github.com/your-username/your-repo-name.git
+     git clone https://github.com/AlviRownok/arcgis-map-app.git
      ```
 
 2. **Push Your Code to GitHub**
@@ -69,7 +67,7 @@ Follow these steps to host your application on GitHub Pages:
    - Navigate to the project directory:
 
      ```bash
-     cd your-repo-name
+     cd arcgis-map-app
      ```
 
    - Initialize a Git repository if you haven't already:
@@ -93,7 +91,7 @@ Follow these steps to host your application on GitHub Pages:
    - Add the remote origin (if not set):
 
      ```bash
-     git remote add origin https://github.com/your-username/your-repo-name.git
+     git remote add origin https://github.com/your-username/arcgis-map-app.git
      ```
 
    - Push the code to GitHub:
